@@ -1,4 +1,4 @@
-# Kilofox Ehpemeris
+# Kilofox Ephemeris
 
 :date: 千狐天文历是一款利用天文算法实现中国农历与公历无表查询的日历产品，可用于西元前1000年至西元3000年期间的日期转换。
 
