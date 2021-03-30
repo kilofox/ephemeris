@@ -1,0 +1,26 @@
+{
+	"name": "kilofox/ephemeris",
+	"description": "千狐天文历",
+	"keywords": [
+		"chinese",
+		"calendar", 
+		"lunar", 
+		"solar", 
+		"solar2lunar", 
+		"lunar2solar"
+	],
+	"authors": [
+		{
+			"name": "Tinsh",
+			"email": "kilofox2000@gmail.com"
+		}
+	],
+	"require": {
+		"php": "~7"
+	},
+	"autoload": {
+		"psr-4": {
+			"Kilofox\\Ephemeris\\": "src"
+		}
+	}
+}
