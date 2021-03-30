@@ -15,6 +15,7 @@
 			"email": "kilofox2000@gmail.com"
 		}
 	],
+	"license": "MIT",
 	"require": {
 		"php": "~7"
 	},
