@@ -18,10 +18,16 @@ namespace Kilofox\Ephemeris;
  */
 class Destiny
 {
-    /** @var array $csx 十二生肖 */
-    protected $csx = [
+    /** @var array $zodiacAnimals 十二生肖 */
+    protected $zodiacAnimals = [
         '鼠', '牛', '虎', '兔', '龙', '蛇',
         '马', '羊', '猴', '鸡', '狗', '猪'
+    ];
+
+    /** @var array $zodiacSigns 十二星座 */
+    protected $zodiacSigns = [
+        '摩羯', '宝瓶', '双魚', '白羊', '金牛', '双子',
+        '巨蟹', '狮子', '室女', '天秤', '天蝎', '人马'
     ];
 
     /** @var array $cwx 五行 */
@@ -82,12 +88,6 @@ class Destiny
         [8, 9, 6, 7, 4, 5, 3, 2, 0, 1],
         [7, 6, 5, 4, 2, 3, 1, 0, 9, 8],
         [1, 0, 9, 8, 7, 6, 5, 4, 2, 3]
-    ];
-
-    /** @var array $cxz 十二星座 */
-    protected $cxz = [
-        '摩羯', '宝瓶', '双魚', '白羊', '金牛', '双子',
-        '巨蟹', '狮子', '室女', '天秤', '天蝎', '人马'
     ];
 
     /** @var array $zcg 地支藏干表，支藏干 */
@@ -151,37 +151,37 @@ class Destiny
      * @param int $hour 时间(0-23)
      * @param int $minute 分钟数(0-59)
      * @param int $second 秒数(0-59)
-     * @return int|false $this->cxz[xz]
+     * @return int|false $this->zodiacSigns[$zodiac]
      */
-    public function GetXZ(int $year, int $month, int $day, int $hour, int $minute = 0, int $second = 0)
+    public function zodiac(int $year, int $month, int $day, int $hour, int $minute = 0, int $second = 0)
     {
         if ($this->validDate($year, $month, $day) === false) {
             return false;
         }
 
         // 特殊JD
-        $spcjd = $this->gcd2jdn($year, $month, $day, $hour, $minute, $second);
+        $spcjd = Calendar::gd2jd($year, $month, $day, $hour, $minute, $second);
         if ($spcjd === false) {
             return false;
         }
 
         // 显示星座，根据公历的中气判断
-        $zr = $this->ZQSinceWinterSolstice($year);
+        $zr = Calendar::ZQSinceWinterSolstice($year);
 
         if ($spcjd < $zr[0]) {
-            $zr = $this->ZQSinceWinterSolstice($year - 1);
+            $zr = Calendar::ZQSinceWinterSolstice($year - 1);
         }
 
         // 若小于雨水，则归上一年
         // 先找到指定时刻前后的中气月首，即指定时刻所在的节气月首JD值
         for ($i = 0; $i <= 13; $i++) {
             if ($spcjd < $zr[$i]) {
-                $xz = ($i + 12 - 1) % 12;
+                $zodiac = ($i + 12 - 1) % 12;
                 break;
             }
         }
 
-        return $xz;
+        return $zodiac;
     }
 
     /**
@@ -208,13 +208,13 @@ class Destiny
         }
 
         // 特殊JD
-        $spcjd = $this->gcd2jdn($year, $month, $day, $hour, $minute, $second);
+        $spcjd = Calendar::gd2jd($year, $month, $day, $hour, $minute, $second);
         if ($spcjd === false) {
             return false;
         }
 
         // 假设 $hour 传了大于 24 的数字，此处修正
-        list($year, $month, $day, $hour, $minute, $second) = $this->jdn2gcd($spcjd);
+        list($year, $month, $day, $hour, $minute, $second) = Calendar::jd2gd($spcjd);
 
         // 一个回归年的天数
         $ta = 365.24244475;
@@ -234,7 +234,7 @@ class Destiny
         $ty = $year;
 
         //取得自立春开始的非中气之二十四节气
-        $jr = $this->pureTermsSinceSpring($ty);
+        $jr = Calendar::pureTermsSinceSpring($ty);
 
         // jr[0]为立春，约在2月5日前后，
         if ($spcjd < $jr[0]) {
@@ -242,7 +242,7 @@ class Destiny
             $ty = $year - 1;
 
             // 取得自立春开始的非中气之12节气
-            $jr = $this->pureTermsSinceSpring($ty);
+            $jr = Calendar::pureTermsSinceSpring($ty);
         }
 
         list($cs, $tb) = $this->cstb($year, $month, $day, $hour, $minute, $second);
@@ -388,7 +388,7 @@ class Destiny
         $qyt = $spcjd + $zf;
 
         // 将起运时刻的JD值转换为年月日时分秒
-        $jt = $this->jdn2gcd($qyt);
+        $jt = Calendar::jd2gd($qyt);
 
         // 起运年（公历）
         $qyy = $jt[0];
@@ -396,12 +396,12 @@ class Destiny
         // 起运年
         $rt['qyy'] = $qyy;
 
-        // 一年按 ta 天算，一个月按 ta / 12 天算
+        // 一年按 $ta 天算，一个月按 $ta / 12 天算
         $rt['qyy_desc'] = '出生后' . intval($zf / $ta) . '年' . intval($zf % $ta / ($ta / 12)) . '个月' . intval($zf % $ta % ($ta / 12)) . '天起运';
 
         // 求算起运年（指节气年，农历）
         // 取得自立春开始的非中气之12节气
-        $qjr = $this->pureTermsSinceSpring($qyy);
+        $qjr = Calendar::pureTermsSinceSpring($qyy);
 
         // qjr[0]为立春，约在2月5日前后
         if ($qyt >= $qjr[0]) {
@@ -527,17 +527,17 @@ class Destiny
         }
 
         // 显示星座，根据公历的中气判断
-        $zr = $this->ZQSinceWinterSolstice($year);
+        $zr = Calendar::ZQSinceWinterSolstice($year);
 
         if ($spcjd < $zr[0]) {
-            $zr = $this->ZQSinceWinterSolstice($year - 1);
+            $zr = Calendar::ZQSinceWinterSolstice($year - 1);
         }
 
         // 若小于雨水，则归上一年
         // 先找到指定时刻前后的中气月首，即指定时刻所在的节气月首JD值。
         for ($i = 0; $i <= 13; $i++) {
             if ($spcjd < $zr[$i]) {
-                $xz = ($i + 12 - 1) % 12;
+                $zodiac = ($i + 12 - 1) % 12;
                 break;
             }
         }
@@ -552,7 +552,7 @@ class Destiny
         $rt['gl'] = [$year, $month, $day];
 
         // 农历生日
-        $rt['nl'] = $this->Solar2Lunar($year, $month, $day);
+        $rt['nl'] = $this->solar2lunar($year, $month, $day);
 
         // 八字天干数组
         $rt['tg'] = $cs;
@@ -576,10 +576,10 @@ class Destiny
         }
 
         // 生肖与年地支对应
-        $rt['sx'] = $this->csx[$tb[0]];
+        $rt['chinese_zodiac'] = $this->zodiacAnimals[$tb[0]];
 
         // 星座
-        $rt['xz'] = $this->cxz[$xz];
+        $rt['zodiac'] = $this->zodiacSigns[$zodiac];
 
         // 日干阴阳
         $rt['cyy'] = $this->cyy[$yeartg[2]];

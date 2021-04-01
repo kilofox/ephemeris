@@ -11,8 +11,6 @@
 
 namespace Kilofox\Ephemeris;
 
-use Kilofox\Ephemeris\Ephemeris;
-
 /**
  * 中国农历。
  *
@@ -26,9 +24,6 @@ class Calendar
     /** @var bool $devideFDH 干支是否区分夜子时和早子时 */
     public $devideFDH = true;
 
-    /** @var array $adjustedTerms 调整后的节气，用于缓存 */
-    private static $adjustedTerms = [];
-
     /** @var array $cstbs 六十甲子 */
     protected $cstbs = [
         '甲子', '乙丑', '丙寅', '丁卯', '戊辰', '己巳', '庚午', '辛未', '壬申', '癸酉',
@@ -39,45 +34,45 @@ class Calendar
         '甲寅', '乙卯', '丙辰', '丁巳', '戊午', '己未', '庚申', '辛酉', '壬戌', '癸亥'
     ];
 
-    /** @var array $months 农历月名称列表 */
+    /** @var array $months 农历月名 */
     protected $months = [
         '正月', '二月', '三月', '四月', '五月', '六月',
         '七月', '八月', '九月', '十月', '十一月', '十二月'
     ];
 
-    /** @var array $monthAlias 农历月别称列表 */
+    /** @var array $monthAlias 农历月别称 */
     protected $monthAlias = [
         '正月', '二月', '三月', '四月', '五月', '六月',
         '七月', '八月', '九月', '十月', '冬月', '腊月'
     ];
 
-    /** @var array $days 大写日期 */
+    /** @var array $days 农历日名 */
     protected $days = [
         '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '廿十',
         '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
     ];
 
-    /** @var array $weeks 星期列表 */
+    /** @var array $weeks 星期名 */
     protected $weeks = ['日', '一', '二', '三', '四', '五', '六'];
 
     /** @var array $numbers 数字 */
     protected $numbers = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
-    /** @var array $css 天干名称列表 */
+    /** @var array $css 十天干名 */
     protected static $css = [
         '甲', '乙', '丙', '丁', '戊',
         '己', '庚', '辛', '壬', '癸'
     ];
 
-    /** @var array $tbs 地支名称列表 */
+    /** @var array $tbs 十二地支名 */
     protected static $tbs = [
         '子', '丑', '寅', '卯', '辰', '巳',
         '午', '未', '申', '酉', '戌', '亥'
     ];
 
-    /** @var array $terms 二十四节气名称列表 */
-    public $terms = [
+    /** @var array $terms 二十四节气名 */
+    public $solarTerms = [
         '春分', '清明', '谷雨', '立夏', '小满', '芒种', '夏至', '小暑',
         '大暑', '立秋', '处暑', '白露', '秋分', '寒露', '霜降', '立冬',
         '小雪', '大雪', '冬至', '小寒', '大寒', '立春', '雨水', '惊蛰'
@@ -95,7 +90,7 @@ class Calendar
      * @return float
      * @throws InvalidArgumentException
      */
-    public function gd2jd(int $year, int $month, int $day, int $hour, int $minute = 0, int $second = 0)
+    public static function gd2jd(int $year, int $month, int $day, int $hour, int $minute = 0, int $second = 0)
     {
         // 超出计算能力
         if ($year < -7000 || $year > 7000) {
@@ -132,7 +127,7 @@ class Calendar
      * @param float $jd
      * @return array
      */
-    public function jd2gd(float $jd)
+    public static function jd2gd(float $jd)
     {
         if ($jd >= 2299160.5) {
             $y4h = 146097;
@@ -192,12 +187,9 @@ class Calendar
             $dom = 30 + ((abs($month - 7.5) + 0.5) % 2) - ($month === 2) * (2 + $ndf);
 
             if ($day <= 0 || $day > $dom) {
-                // 此年无闰月
                 if ($ndf === 0 && $month === 2 && $day === 29) {
                     throw new \InvalidArgumentException('此年无闰月');
-                }
-                // 日期超出范围
-                else {
+                } else {
                     throw new \InvalidArgumentException('日期超出范围');
                 }
                 $vd = false;
@@ -213,137 +205,12 @@ class Calendar
     }
 
     /**
-     * 计算指定年（公历)的春分点（vernal equinox）理论值。
-     * 因地球在绕日运行时会因受到其他星球之影响而产生摄动，必须将此现象产生的偏移量加入。
+     * 从冬至开始的连续16个中气。
      *
      * @param int $year
-     * @return float 儒略日数
-     * @throws InvalidArgumentException
+     * @return array $this->solarTerms[(2*i+18)%24]
      */
-    private function VE(int $year)
-    {
-        if ($year >= 1000 && $year <= 8001) {
-            $m = ($year - 2000) / 1000;
-            $jdve = 2451623.80984 + 365242.37404 * $m + 0.05169 * $m * $m - 0.00411 * $m * $m * $m - 0.00057 * $m * $m * $m * $m;
-        } elseif ($year >= -8000 && $year < 1000) {
-            $m = $year / 1000;
-            $jdve = 1721139.29189 + 365242.1374 * $m + 0.06134 * $m * $m + 0.00111 * $m * $m * $m - 0.00071 * $m * $m * $m * $m;
-        } else {
-            throw new \InvalidArgumentException('超出计算能力');
-        }
-
-        return $jdve;
-    }
-
-    /**
-     * 获取指定公历年的春分开始的二十四节气理论值。
-     * 大致原理：把公转轨道进行24等分，每一等分为一个节气，此为理论值，再用摄动值和 deltaT 做调整得到实际值。
-     *
-     * @param int $year
-     * @param int $init 从 0 开始
-     * @param int $num 1 至 24，若超过则有几秒的误差
-     * @return array 下标从 1 开始的数组
-     */
-    public function MeanJQJD(int $year, int $init, int $num)
-    {
-        $jdez = [];
-        $jdve = $this->VE($year);
-
-        // 求指定年的春分点及回归年长
-        $ty = $this->VE($year + 1) - $jdve;
-
-        $ath = 2 * M_PI / 24;
-        $tx = ($jdve - 2451545) / 365250;
-        $e = 0.0167086342 - 0.0004203654 * $tx - 0.0000126734 * $tx * $tx + 0.0000001444 * $tx * $tx * $tx - 0.0000000002 * $tx * $tx * $tx * $tx + 0.0000000003 * $tx * $tx * $tx * $tx * $tx;
-        $tt = $year / 1000;
-        $vp = 111.25586939 - 17.0119934518333 * $tt - 0.044091890166673 * $tt * $tt - 4.37356166661345E-04 * $tt * $tt * $tt + 8.16716666602386E-06 * $tt * $tt * $tt * $tt;
-        $rvp = $vp * 2 * M_PI / 360;
-        $peri = [];
-
-        for ($i = 1; $i <= ($init + $num); $i++) {
-            $flag = 0;
-            $th = $ath * ($i - 1) + $rvp;
-
-            if ($th > M_PI && $th <= 3 * M_PI) {
-                $th = 2 * M_PI - $th;
-                $flag = 1;
-            }
-
-            if ($th > 3 * M_PI) {
-                $th = 4 * M_PI - $th;
-                $flag = 2;
-            }
-
-            $f1 = 2 * atan((sqrt((1 - $e) / (1 + $e)) * tan($th / 2)));
-            $f2 = ($e * sqrt(1 - $e * $e) * sin($th)) / (1 + $e * cos($th));
-            $f = ($f1 - $f2) * $ty / 2 / M_PI;
-
-            if ($flag == 1) {
-                $f = $ty - $f;
-            }
-
-            if ($flag == 2) {
-                $f = 2 * $ty - $f;
-            }
-
-            $peri[$i] = $f;
-        }
-
-        for ($i = max(1, $init); $i <= ($init + $num); $i++) {
-            $jdez[$i] = $jdve + $peri[$i] - $peri[1];
-        }
-
-        return $jdez;
-    }
-
-    /**
-     * 获取指定公历年对摄动作调整后的自春分点开始的二十四节气。
-     *
-     * @param int $year
-     * @param int $init 0-23
-     * @param int $num 1-24 取的个数
-     * @return array
-     */
-    public function adjustedTerms(int $year, int $init, int $num)
-    {
-        $jdez = [];
-        $jdjq = [];
-
-        if (!isset(self::$adjustedTerms[$year])) {
-            // 输入指定年，求该回归年各节气点
-            $jdez = $this->MeanJQJD($year, 0, 26);
-
-            for ($i = 1; $i <= 26; $i++) {
-                // 受摄动影响所需的微调
-                $ptb = Ephemeris::perturbation($jdez[$i]);
-
-                // 修正 dynamical time to Universal time
-                $dt = Ephemeris::deltaT($year, floor($i / 2) + 3);
-
-                // 加上摄动调整值ptb，减去对应的 Delta T 值（分钟转换为日）
-                $jdez[$i] = $jdez[$i] + $ptb - $dt / 86400;
-
-                // 中国时间比格林威治时间先行8小时
-                $jdez[$i] = $jdez[$i] + 1 / 3;
-            }
-
-            self::$adjustedTerms[$year] = $jdez;
-        }
-
-        for ($i = $init + 1; $i <= ($init + $num); $i++) {
-            $jdjq[$i] = self::$adjustedTerms[$year][$i];
-        }
-
-        return $jdjq;
-    }
-
-    /**
-     * 求出自冬至点为起点的连续16个中气。
-     *
-     * @param int $year
-     * @return array $this->terms[(2*i+18)%24]
-     */
-    private function ZQSinceWinterSolstice(int $year)
+    public static function ZQSinceWinterSolstice(int $year)
     {
         $jdzq = [];
 
@@ -351,7 +218,7 @@ class Calendar
         $dj = [];
 
         // 求出指定年冬至开始之节气JD值，以上一年的值代入
-        $dj = $this->adjustedTerms($year - 1, 18, 5);
+        $dj = Ephemeris::adjustedSolarTerms($year - 1, 18, 5);
 
         // 转移春分前之节气至 $jdzq 变量中，以重整键名
         // 冬至中气
@@ -364,7 +231,7 @@ class Calendar
         $jdzq[2] = $dj[23];
 
         // 求出指定年节气之JD值
-        $dj = $this->adjustedTerms($year, 0, 26);
+        $dj = Ephemeris::adjustedSolarTerms($year, 0, 26);
 
         for ($i = 1; $i <= 13; $i++) {
             // 转移冬至后之节气至 $jdzq 变量中，以重整键名
@@ -378,15 +245,15 @@ class Calendar
      * 求出某公历年以立春开始的不含中气之12节气。
      *
      * @param int $year
-     * @return array $this->terms[(2*i+21)%24]
+     * @return array $this->solarTerms[(2*i+21)%24]
      */
-    private function pureTermsSinceSpring(int $year)
+    public static function pureTermsSinceSpring(int $year)
     {
         $jdpjq = [];
         $sjdjq = [];
 
         // 求出含指定年立春开始之三个节气JD值，以上一年的年值代入
-        $sjdjq = $this->adjustedTerms($year - 1, 21, 3);
+        $sjdjq = Ephemeris::adjustedSolarTerms($year - 1, 21, 3);
 
         // 转移春分前之立春至惊蛰之节气至 $jdpjq 变量中，以重整键名
         // 立春
@@ -396,7 +263,7 @@ class Calendar
         $jdpjq[1] = $sjdjq[24];
 
         // 求出指定年节气之 JD 值，从惊蛰开始，到雨水
-        $sjdjq = $this->adjustedTerms($year, 0, 26);
+        $sjdjq = Ephemeris::adjustedSolarTerms($year, 0, 26);
 
         // 转移春分至小寒之节气至 $jdpjq 变量中，以重整键名
         for ($i = 1; $i <= 13; $i++) {
@@ -412,10 +279,10 @@ class Calendar
      * @param int $year 年份
      * @return array
      */
-    private function SMSinceWinterSolstice(int $year)
+    private static function SMSinceWinterSolstice(int $year)
     {
         // 求出指定年冬至开始之节气JD值，以上一年的值代入
-        $dj = $this->adjustedTerms($year - 1, 18, 5);
+        $dj = Ephemeris::adjustedSolarTerms($year - 1, 18, 5);
 
         // 转移春分前之节气至 $jdzq 变量中，以重整键名
         // 冬至中气
@@ -424,7 +291,7 @@ class Calendar
         $jdnm = [];
 
         // 求年初前两个月附近的新月点（即上一年的11月初）
-        $spcjd = $this->gd2jd($year - 1, 11, 0, 0);
+        $spcjd = self::gd2jd($year - 1, 11, 0, 0);
 
         // 自2000年1月起的朔望月个数
         $kn = Ephemeris::newMoonNumber($spcjd);
@@ -466,15 +333,15 @@ class Calendar
      * @param int $year
      * @return array
      */
-    private function GetZQandSMandLunarMonthCode(int $year)
+    private static function GetZQandSMandLunarMonthCode(int $year)
     {
         $mc = [];
 
         // 取得以上一年冬至为起点之连续17个中气
-        $jdzq = $this->ZQSinceWinterSolstice($year);
+        $jdzq = self::ZQSinceWinterSolstice($year);
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $jdnm = $this->SMSinceWinterSolstice($year);
+        $jdnm = self::SMSinceWinterSolstice($year);
 
         // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
         $yz = 0;
@@ -531,7 +398,7 @@ class Calendar
      */
     public function week($year, $month, $day)
     {
-        $spcjd = $this->gd2jd($year, $month, $day, 12, 0, 0);
+        $spcjd = self::gd2jd($year, $month, $day, 12, 0, 0);
 
         if ($spcjd === false) {
             return false;
@@ -592,8 +459,8 @@ class Calendar
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = $this->SMSinceWinterSolstice($year);
-        $mc = $this->GetZQandSMandLunarMonthCode($year);
+        $sjd = self::SMSinceWinterSolstice($year);
+        $mc = self::GetZQandSMandLunarMonthCode($year);
 
         // 0 代表无闰月
         $leapMonth = 0;
@@ -663,7 +530,7 @@ class Calendar
      */
     public function leapMonth(int $year)
     {
-        $mc = $this->GetZQandSMandLunarMonthCode($year);
+        $mc = self::GetZQandSMandLunarMonthCode($year);
 
         // 0 代表无闰月
         $leapMonth = 0;
@@ -685,12 +552,12 @@ class Calendar
      * 求出含某公历年立春点开始的二十四节气的儒略日历时间。
      *
      * @param int $year
-     * @return array $this->terms[(i+21)%24]
+     * @return array $this->solarTerms[(i+21)%24]
      */
     public function solarTerms(int $year)
     {
         // 求出含指定年立春开始之3个节气JD值，以上一年的年值代入
-        $sjdjq = $this->adjustedTerms($year - 1, 21, 3);
+        $sjdjq = Ephemeris::adjustedSolarTerms($year - 1, 21, 3);
 
         // 转移春分前之立春至惊蛰之节气至 $jdpjq 变量中，以重整键名
         // 立春
@@ -703,7 +570,7 @@ class Calendar
         $jdpjq[2] = $sjdjq[24];
 
         // 求出指定年节气之JD值,从春分开始，到大寒
-        $sjdjq = $this->adjustedTerms($year, 0, 21);
+        $sjdjq = Ephemeris::adjustedSolarTerms($year, 0, 21);
 
         // 转移春分至大寒之节气至 $jdpjq 变量中，以重整键名
         for ($i = 1; $i <= 21; $i++) {
@@ -735,7 +602,7 @@ class Calendar
             return false;
         }
 
-        $spcjd = $this->gd2jd($year, $month, $day, $hour, $minute, $second);
+        $spcjd = self::gd2jd($year, $month, $day, $hour, $minute, $second);
 
         if ($spcjd === false) {
             return false;
@@ -746,7 +613,7 @@ class Calendar
         $ty = $year;
 
         // 取得自立春开始的非中气之二十四节气
-        $jr = $this->pureTermsSinceSpring($year);
+        $jr = self::pureTermsSinceSpring($year);
 
         // jr[0] 为立春，约在2月5日前后
         if ($this->springBegins && $spcjd < $jr[0]) {
@@ -754,7 +621,7 @@ class Calendar
             $ty = $year - 1;
 
             // 取得自立春开始的不含中气之12节气
-            $jr = $this->pureTermsSinceSpring($ty);
+            $jr = self::pureTermsSinceSpring($ty);
         }
 
         $cs = [];
@@ -774,7 +641,7 @@ class Calendar
             }
         }
 
-        $tmm = (($ty + 4712) * 12 + ($tm) + 60) % 60;
+        $tmm = (($ty + 4712) * 12 + $tm + 60) % 60;
         $mgz = ($tmm + 50) % 60;
 
         // 月柱干支
@@ -909,7 +776,7 @@ class Calendar
             $iy = $yea + $asyc;
 
             // 该年的立春开始的节
-            $jdpjq = $this->pureTermsSinceSpring($iy);
+            $jdpjq = self::pureTermsSinceSpring($iy);
 
             // 已知干支代码，要求干支名，只需将干支代码除以10，所得的余数即为天干的代码；将干支代码除以12，所得的余数即为地支的代码。这里求得mgz在第几个月
             $mgzo = ($mgz + 60 - 2) % 12;
@@ -955,7 +822,7 @@ class Calendar
                 }
 
                 // 儒略日历时间转成公历时间
-                $ifs[] = [$this->jd2gd($ids), $this->jd2gd($fds)];
+                $ifs[] = [self::jd2gd($ids), self::jd2gd($fds)];
             }
         }
 
@@ -1070,17 +937,17 @@ class Calendar
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = $this->SMSinceWinterSolstice($year);
-        $mc = $this->GetZQandSMandLunarMonthCode($year);
+        $sjd = self::SMSinceWinterSolstice($year);
+        $mc = self::GetZQandSMandLunarMonthCode($year);
 
         // 求出指定年月日之JD值
-        $jdx = $this->gd2jd($year, $month, $day, 12);
+        $jdx = self::gd2jd($year, $month, $day, 12);
 
         if (floor($jdx) < floor($sjd[0] + 0.5)) {
             $flag = 1;
             // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-            $sjd = $this->SMSinceWinterSolstice($year - 1);
-            $mc = $this->GetZQandSMandLunarMonthCode($year - 1);
+            $sjd = self::SMSinceWinterSolstice($year - 1);
+            $mc = self::GetZQandSMandLunarMonthCode($year - 1);
         }
 
         for ($i = 0; $i <= 14; $i++) {
@@ -1156,8 +1023,8 @@ class Calendar
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = $this->SMSinceWinterSolstice($year);
-        $mc = $this->GetZQandSMandLunarMonthCode($year);
+        $sjd = self::SMSinceWinterSolstice($year);
+        $mc = self::GetZQandSMandLunarMonthCode($year);
 
         // 若闰月旗标为0代表无闰月
         $leapMonth = 0;
@@ -1229,7 +1096,7 @@ class Calendar
             }
         }
 
-        $date = $this->jd2gd($jdx);
+        $date = self::jd2gd($jdx);
 
         return [
             'solar_year' => (int) $date[0],

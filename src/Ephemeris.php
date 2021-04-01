@@ -21,6 +21,9 @@ class Ephemeris
     /** @var float SYNODIC_MONTH 朔望月周期平均天数 */
     const SYNODIC_MONTH = 29.530589;
 
+    /** @var array $asts 调整后的节气，用于暂存 */
+    private static $asts = [];
+
     /**
      * 求∆t，单位为秒。
      *
@@ -56,7 +59,7 @@ class Ephemeris
                 break;
             case $y < 1860:
                 $t = $y - 1800;
-                $dt = 13.72 - 0.332447 * $t + 0.0068612 * $t * $t + 0.0041116 * pow($t, 3) - 0.00037436 * pow($t, 4) + 0.0000121272 * pow($t, 5) - 0.0000001699 * pow($t, 6) + 0.000000000875 * pow($t, 7);
+                $dt = 13.72 - 0.332447 * $t + 0.0068612 * $t * $t + 0.0041116 * pow($t, 3) - 0.00037436 * pow($t, 4) + 1.21272E-5 * pow($t, 5) - 1.699E-7 * pow($t, 6) + 8.75E-10 * pow($t, 7);
                 break;
             case $y < 1900:
                 $t = $y - 1860;
@@ -80,7 +83,7 @@ class Ephemeris
                 break;
             case $y < 2005:
                 $t = $y - 2000;
-                $dt = 63.86 + 0.3345 * $t - 0.060374 * $t * $t + 0.0017275 * pow($t, 3) + 0.000651814 * pow($t, 4) + 0.00002373599 * pow($t, 5);
+                $dt = 63.86 + 0.3345 * $t - 0.060374 * $t * $t + 0.0017275 * pow($t, 3) + 0.000651814 * pow($t, 4) + 2.373599E-5 * pow($t, 5);
                 break;
             case $y < 2050:
                 $t = $y - 2000;
@@ -129,11 +132,11 @@ class Ephemeris
         $s = 0;
 
         for ($k = 0; $k <= 23; $k++) {
-            $s = $s + $ptsa[$k] * cos($ptsb[$k] * 2 * M_PI / 360 + $ptsc[$k] * 2 * M_PI / 360 * $t);
+            $s = $s + $ptsa[$k] * cos($ptsb[$k] * M_PI / 180 + $ptsc[$k] * M_PI / 180 * $t);
         }
 
         $w = 35999.373 * $t - 2.47;
-        $l = 1 + 0.0334 * cos($w * 2 * M_PI / 360) + 0.0007 * cos(2 * $w * 2 * M_PI / 360);
+        $l = 1 + 0.0334 * cos($w * M_PI / 180) + 0.0007 * cos(2 * $w * M_PI / 180);
         $ptb = 0.00001 * $s / $l;
 
         return $ptb;
@@ -175,19 +178,19 @@ class Ephemeris
         $t4 = $t3 * $t;
 
         // mean time of phase
-        $pt = $jdt + 0.0001337 * $t2 - 0.00000015 * $t3 + 0.00000000073 * $t4;
+        $pt = $jdt + 0.0001337 * $t2 - 1.5E-7 * $t3 + 7.3E-10 * $t4;
 
         // 地球绕太阳运行均值近点角（从太阳观察）
-        $m = 2.5534 + 29.10535669 * $k - 0.0000218 * $t2 - 0.00000011 * $t3;
+        $m = 2.5534 + 29.10535669 * $k - 2.18E-5 * $t2 - 1.1E-7 * $t3;
 
         // 月球绕地球运行均值近点角（从地球观察）
-        $mprime = 201.5643 + 385.81693528 * $k + 0.0107438 * $t2 + 0.00001239 * $t3 - 0.000000058 * $t4;
+        $mprime = 201.5643 + 385.81693528 * $k + 0.0107438 * $t2 + 1.239E-5 * $t3 - 5.8E-8 * $t4;
 
         // 月球的纬度参数
-        $f = 160.7108 + 390.67050274 * $k - 0.0016341 * $t2 - 0.00000227 * $t3 + 0.000000011 * $t4;
+        $f = 160.7108 + 390.67050274 * $k - 0.0016341 * $t2 - 2.27E-6 * $t3 + 1.1E-8 * $t4;
 
         // 月球绕日运行轨道升交点经度
-        $omega = 124.7746 - 1.5637558 * $k + 0.0020691 * $t2 + 0.00000215 * $t3;
+        $omega = 124.7746 - 1.5637558 * $k + 0.0020691 * $t2 + 2.15E-6 * $t3;
 
         // 乘式因子
         $es = 1 - 0.002516 * $t - 0.0000074 * $t2;
@@ -237,6 +240,136 @@ class Ephemeris
         $tnm = $pt + $apt1 + $apt2;
 
         return $tnm;
+    }
+
+    /**
+     * 计算指定年（公历）的春分点理论值。
+     * 因地球在绕日运行时会因受到其他星球的影响而产生摄动，必须将此现象产生的偏移量加入。
+     *
+     * @param int $year 公历年
+     * @return float 儒略日数
+     * @throws InvalidArgumentException
+     */
+    public static function vernalEquinox(int $year)
+    {
+        if ($year >= 1000 && $year <= 8001) {
+            $m = ($year - 2000) / 1000;
+            $jd = 2451623.80984 + 365242.37404 * $m + 0.05169 * $m * $m - 0.00411 * pow($m, 3) - 0.00057 * pow($m, 4);
+        } elseif ($year >= -8000 && $year < 1000) {
+            $m = $year / 1000;
+            $jd = 1721139.29189 + 365242.1374 * $m + 0.06134 * $m * $m + 0.00111 * pow($m, 3) - 0.00071 * pow($m, 4);
+        } else {
+            throw new \InvalidArgumentException('超出计算能力');
+        }
+
+        return $jd;
+    }
+
+    /**
+     * 获取指定公历年的春分开始的二十四节气理论值。
+     * 大致原理：把公转轨道进行24等分，每一等分为一个节气，此为理论值，再用摄动值和 deltaT 做调整得到实际值。
+     *
+     * @param int $year 公历年
+     * @param int $init 从 0 开始
+     * @param int $num 1 至 24，若超过则有几秒的误差
+     * @return array 下标从 1 开始的数组
+     */
+    public static function solarTerms(int $year, int $init, int $num)
+    {
+        $jdez = [];
+
+        // 春分点
+        $ve = self::vernalEquinox($year);
+
+        // 回归年长度
+        $tropicalYear = self::vernalEquinox($year + 1) - $ve;
+
+        $tx = ($ve - 2451545) / 365250;
+        $e = 0.0167086342 - 0.0004203654 * $tx - 1.26734E-5 * $tx * $tx + 1.444E-7 * pow($tx, 3) - 2.0E-10 * pow($tx, 4) + 3.0E-10 * pow($tx, 5);
+
+        // 求春分点与近日点的夹角
+        $tt = $year / 1000;
+        $vp = 111.25586939 - 17.0119934518333 * $tt - 0.044091890166673 * $tt * $tt - 0.00043735616666135 * pow($tt, 3) + 8.1671666660239E-6 * pow($tt, 4);
+
+        $rvp = $vp * M_PI / 180;
+        $ath = M_PI / 12;
+        $peri = [];
+
+        for ($i = 1; $i <= $init + $num; $i++) {
+            $flag = 0;
+            $th = $ath * ($i - 1) + $rvp;
+
+            if ($th > M_PI && $th <= 3 * M_PI) {
+                $th = 2 * M_PI - $th;
+                $flag = 1;
+            }
+
+            if ($th > 3 * M_PI) {
+                $th = 4 * M_PI - $th;
+                $flag = 2;
+            }
+
+            $f1 = 2 * atan((sqrt((1 - $e) / (1 + $e)) * tan($th / 2)));
+            $f2 = ($e * sqrt(1 - $e * $e) * sin($th)) / (1 + $e * cos($th));
+            $f = ($f1 - $f2) * $tropicalYear / 2 / M_PI;
+
+            if ($flag == 1) {
+                $f = $tropicalYear - $f;
+            }
+
+            if ($flag == 2) {
+                $f = 2 * $tropicalYear - $f;
+            }
+
+            $peri[$i] = $f;
+        }
+
+        for ($i = max(1, $init); $i <= $init + $num; $i++) {
+            $jdez[$i] = $ve + $peri[$i] - $peri[1];
+        }
+
+        return $jdez;
+    }
+
+    /**
+     * 获取指定公历年对摄动作调整后的自春分点开始的二十四节气。
+     *
+     * @param int $year
+     * @param int $init 0-23
+     * @param int $num 1-24 取的个数
+     * @return array
+     */
+    public static function adjustedSolarTerms(int $year, int $init, int $num)
+    {
+        $jdez = [];
+        $jdjq = [];
+
+        if (!isset(self::$asts[$year])) {
+            // 输入指定年，求该回归年各节气点
+            $jdez = self::solarTerms($year, 0, 26);
+
+            for ($i = 1; $i <= 26; $i++) {
+                // 受摄动影响所需的微调
+                $ptb = self::perturbation($jdez[$i]);
+
+                // 力学时转换为世界时
+                $dt = self::deltaT($year, floor($i / 2) + 3);
+
+                // 加上摄动调整值ptb，减去对应的 Delta T 值（分钟转换为日）
+                $jdez[$i] = $jdez[$i] + $ptb - $dt / 86400;
+
+                // 中国时间比格林威治时间先行8小时
+                $jdez[$i] = $jdez[$i] + 1 / 3;
+            }
+
+            self::$asts[$year] = $jdez;
+        }
+
+        for ($i = $init + 1; $i <= ($init + $num); $i++) {
+            $jdjq[$i] = self::$asts[$year][$i];
+        }
+
+        return $jdjq;
     }
 
 }
