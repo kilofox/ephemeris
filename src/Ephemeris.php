@@ -18,7 +18,7 @@ namespace Kilofox\Ephemeris;
  */
 class Ephemeris
 {
-    /** @var float SYNODIC_MONTH 朔望月周期平均天数 */
+    /** @var float SYNODIC_MONTH 朔望月平均天数 */
     const SYNODIC_MONTH = 29.530589;
 
     /** @var array $asts 调整后的节气，用于暂存 */
@@ -156,7 +156,7 @@ class Ephemeris
 
     /**
      * 求出实际新月点。
-     * 以2000年的第一个均值新月点为0点求出的均值新月点和其朔望月之序数k代入此方程式来求算实际新月点。
+     * 以2000年的第一个均值新月点为0点求出的均值新月点和其朔望月之序数 $k 代入此方程式来求算实际新月点。
      *
      * @param int $k
      * @return float
@@ -276,8 +276,6 @@ class Ephemeris
      */
     public static function solarTerms(int $year, int $init, int $num)
     {
-        $jdez = [];
-
         // 春分点
         $ve = self::vernalEquinox($year);
 
@@ -324,6 +322,8 @@ class Ephemeris
             $peri[$i] = $f;
         }
 
+        $jdez = [];
+
         for ($i = max(1, $init); $i <= $init + $num; $i++) {
             $jdez[$i] = $ve + $peri[$i] - $peri[1];
         }
@@ -334,16 +334,13 @@ class Ephemeris
     /**
      * 获取指定公历年对摄动作调整后的自春分点开始的二十四节气。
      *
-     * @param int $year
+     * @param int $year 公历年
      * @param int $init 0-23
      * @param int $num 1-24 取的个数
      * @return array
      */
     public static function adjustedSolarTerms(int $year, int $init, int $num)
     {
-        $jdez = [];
-        $jdjq = [];
-
         if (!isset(self::$asts[$year])) {
             // 输入指定年，求该回归年各节气点
             $jdez = self::solarTerms($year, 0, 26);
@@ -355,7 +352,7 @@ class Ephemeris
                 // 力学时转换为世界时
                 $dt = self::deltaT($year, floor($i / 2) + 3);
 
-                // 加上摄动调整值ptb，减去对应的 Delta T 值（分钟转换为日）
+                // 加上摄动调整值 $ptb ，减去对应的 Delta T 值（分钟转换为日）
                 $jdez[$i] = $jdez[$i] + $ptb - $dt / 86400;
 
                 // 中国时间比格林威治时间先行8小时
@@ -365,11 +362,120 @@ class Ephemeris
             self::$asts[$year] = $jdez;
         }
 
-        for ($i = $init + 1; $i <= ($init + $num); $i++) {
-            $jdjq[$i] = self::$asts[$year][$i];
+        $jdst = [];
+
+        for ($i = $init + 1; $i <= $init + $num; $i++) {
+            $jdst[$i] = self::$asts[$year][$i];
         }
 
-        return $jdjq;
+        return $jdst;
+    }
+
+    /**
+     * 求出某年从冬至开始的连续16个（多取四个以备用）中气JD值。
+     *
+     * @param int $year 公历年
+     * @return array
+     */
+    public static function midClimates(int $year)
+    {
+        // 求出上一年以冬至为起点的中气JD值
+        $sts = self::adjustedSolarTerms($year - 1, 18, 5);
+
+        // 冬至
+        $mts[0] = $sts[19];
+
+        // 大寒
+        $mts[1] = $sts[21];
+
+        // 雨水
+        $mts[2] = $sts[23];
+
+        // 求出指定年的中气JD值
+        $sts = self::adjustedSolarTerms($year, 0, 26);
+
+        for ($i = 1; $i <= 13; $i++) {
+            $mts[$i + 2] = $sts[2 * $i - 1];
+        }
+
+        return $mts;
+    }
+
+    /**
+     * 求算以含冬至中气为阴历11月开始的连续16个新月JD值。
+     *
+     * @param int $year 公历年
+     * @return array
+     */
+    public static function newMoons(int $year)
+    {
+        // 求出上一年的冬至JD值
+        $sts = self::adjustedSolarTerms($year - 1, 18, 1);
+
+        // 冬至
+        $jdws = $sts[19];
+
+        // 求年初前两个月附近的新月点（即上一年的11月初）
+        $spcjd = Calendar::gd2jd($year - 1, 11, 0, 0);
+
+        // 自2000年1月起的新月个数
+        $kn = self::newMoonNumber($spcjd);
+
+        // 求出连续20个新月
+        for ($i = 0; $i <= 19; $i++) {
+            $k = $kn + $i;
+            $mjd = $thejd + self::SYNODIC_MONTH * $i;
+
+            // 以 $k 值代入求瞬时朔望日，中国时间比格林威治时间先行8小时
+            $tjd[$i] = self::trueNewMoon($k) + 1 / 3;
+
+            // 力学时转换为世界时，1 为1月，0 为上一年12月，-1 为上一年11月
+            $tjd[$i] = $tjd[$i] - self::deltaT($year, $i - 1) / 86400;
+        }
+
+        for ($j = 0; $j <= 18; $j++) {
+            // 已超过冬至中气（比较日期法）
+            if (floor($tjd[$j] + 0.5) > floor($jdws + 0.5)) {
+                break;
+            }
+        }
+
+        $jdnm = [];
+
+        for ($k = 0; $k <= 15; $k++) {
+            // 重排键名，使含冬至新月的键名为0
+            $jdnm[$k] = $tjd[$j - 1 + $k];
+        }
+
+        return $jdnm;
+    }
+
+    /**
+     * 求出某年从立春开始的不含中气的十二节气JD值。
+     *
+     * @param int $year 公历年
+     * @return array
+     */
+    public static function preClimatesSinceSpring(int $year)
+    {
+        // 求出指定年春分前的节气JD值，以上一年的年值代入
+        $sts = self::adjustedSolarTerms($year - 1, 21, 3);
+
+        // 立春
+        $pts[0] = $sts[22];
+
+        // 惊蛰
+        $pts[1] = $sts[24];
+
+        // 求出指定年节气JD值，从惊蛰开始，到雨水
+        $sts = self::adjustedSolarTerms($year, 0, 26);
+
+        // 清明至小寒
+        for ($i = 1; $i <= 13; $i++) {
+            $pts[$i + 1] = $sts[2 * $i];
+        }
+
+        return $pts;
     }
 
 }

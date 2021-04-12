@@ -34,19 +34,13 @@ class Calendar
         '甲寅', '乙卯', '丙辰', '丁巳', '戊午', '己未', '庚申', '辛酉', '壬戌', '癸亥'
     ];
 
-    /** @var array $months 农历月名 */
-    protected $months = [
-        '正月', '二月', '三月', '四月', '五月', '六月',
-        '七月', '八月', '九月', '十月', '十一月', '十二月'
-    ];
-
-    /** @var array $monthAlias 农历月别称 */
-    protected $monthAlias = [
+    /** @var array $monthNames 阴历月名 */
+    protected $monthNames = [
         '正月', '二月', '三月', '四月', '五月', '六月',
         '七月', '八月', '九月', '十月', '冬月', '腊月'
     ];
 
-    /** @var array $days 农历日名 */
+    /** @var array $days 阴历日名 */
     protected $days = [
         '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '廿十',
@@ -81,12 +75,12 @@ class Calendar
     /**
      * 将格里高利历日期转换为儒略日期。
      *
-     * @param int $year
-     * @param int $month
-     * @param int $day
-     * @param int $hour
-     * @param int $minute
-     * @param int $second
+     * @param int $year 年
+     * @param int $month 月
+     * @param int $day 日
+     * @param int $hour 时
+     * @param int $minute 分
+     * @param int $second 秒
      * @return float
      * @throws InvalidArgumentException
      */
@@ -124,7 +118,7 @@ class Calendar
     /**
      * 将儒略日期转换为格里高利历日期。
      *
-     * @param float $jd
+     * @param float $jd 儒略日期
      * @return array
      */
     public static function jd2gd(float $jd)
@@ -166,201 +160,104 @@ class Calendar
     /**
      * 验证公历日期是否有效。
      *
-     * @param int $year
-     * @param int $month
-     * @param int $day
-     * @return bool
+     * @param int $year 年
+     * @param int $month 月
+     * @param int $day 日
+     * @return true
      * @throws InvalidArgumentException
      */
-    public function validDate($year, $month, $day)
+    public function validDate(int $year, int $month, int $day)
     {
-        $vd = true;
+        if ($month < 1 || $month > 12) {
+            throw new \InvalidArgumentException('不存在的月份');
+        }
 
-        // 月份超出范围
-        if ($month <= 0 || $month > 12) {
-            throw new \InvalidArgumentException('月份超出范围');
+        if ($month === 2) {
+            if ($year > 1582 && $year % 100 === 0) {
+                $leapYear = $year % 400 === 0;
+            } else {
+                $leapYear = $year % 4 === 0;
+            }
+            $days = $leapYear ? 29 : 28;
         } else {
-            // 可被四整除
-            $ndf1 = -($year % 4 === 0);
-            $ndf2 = (($year % 400 === 0) - ($year % 100 === 0)) && ($year > 1582);
-            $ndf = $ndf1 + $ndf2;
-            $dom = 30 + ((abs($month - 7.5) + 0.5) % 2) - ($month === 2) * (2 + $ndf);
+            $days = (abs($month - 7.5) + 0.5) % 2 === 1 ? 31 : 30;
+        }
 
-            if ($day <= 0 || $day > $dom) {
-                if ($ndf === 0 && $month === 2 && $day === 29) {
-                    throw new \InvalidArgumentException('此年无闰月');
-                } else {
-                    throw new \InvalidArgumentException('日期超出范围');
-                }
-                $vd = false;
+        if ($day < 1 || $day > $days) {
+            throw new \InvalidArgumentException('不存在的日期');
+        }
+
+        if ($year === 1582 && $month === 10 && $day > 4 && $day < 15) {
+            throw new \InvalidArgumentException('不存在的日期');
+        }
+
+        return true;
+    }
+
+    /**
+     * 公历某年月的天数。
+     *
+     * @param int $year 公历年
+     * @param int $month 公历月
+     * @return int
+     * @throws InvalidArgumentException
+     */
+    public function solarDays(int $year, int $month)
+    {
+        if ($month < 1 || $month > 12) {
+            throw new \InvalidArgumentException('不存在的月份');
+        }
+
+        // 1582年10月只有21天
+        if ($year === 1582 && $month === 10) {
+            return 21;
+        }
+
+        if ($month === 2) {
+            if ($year > 1582 && $year % 100 === 0) {
+                $leapYear = $year % 400 === 0;
+            } else {
+                $leapYear = $year % 4 === 0;
             }
+            $days = $leapYear ? 29 : 28;
+        } else {
+            $days = (abs($month - 7.5) + 0.5) % 2 === 1 ? 31 : 30;
         }
 
-        // 此日期不存在
-        if ($year === 1582 && $month === 10 && $day >= 5 && $day < 15) {
-            throw new \InvalidArgumentException('不存在的时间');
-        }
-
-        return $vd;
+        return $days;
     }
 
     /**
-     * 从冬至开始的连续16个中气。
+     * 某年从冬月开始的阴历月份（包含闰月）。
      *
-     * @param int $year
-     * @return array $this->solarTerms[(2*i+18)%24]
-     */
-    public static function ZQSinceWinterSolstice(int $year)
-    {
-        $jdzq = [];
-
-        // 求出以冬至为起点之连续16个中气（多取四个以备用）
-        $dj = [];
-
-        // 求出指定年冬至开始之节气JD值，以上一年的值代入
-        $dj = Ephemeris::adjustedSolarTerms($year - 1, 18, 5);
-
-        // 转移春分前之节气至 $jdzq 变量中，以重整键名
-        // 冬至中气
-        $jdzq[0] = $dj[19];
-
-        // 大寒中气
-        $jdzq[1] = $dj[21];
-
-        // 雨水中气
-        $jdzq[2] = $dj[23];
-
-        // 求出指定年节气之JD值
-        $dj = Ephemeris::adjustedSolarTerms($year, 0, 26);
-
-        for ($i = 1; $i <= 13; $i++) {
-            // 转移冬至后之节气至 $jdzq 变量中，以重整键名
-            $jdzq[$i + 2] = $dj[2 * $i - 1];
-        }
-
-        return $jdzq;
-    }
-
-    /**
-     * 求出某公历年以立春开始的不含中气之12节气。
-     *
-     * @param int $year
-     * @return array $this->solarTerms[(2*i+21)%24]
-     */
-    public static function pureTermsSinceSpring(int $year)
-    {
-        $jdpjq = [];
-        $sjdjq = [];
-
-        // 求出含指定年立春开始之三个节气JD值，以上一年的年值代入
-        $sjdjq = Ephemeris::adjustedSolarTerms($year - 1, 21, 3);
-
-        // 转移春分前之立春至惊蛰之节气至 $jdpjq 变量中，以重整键名
-        // 立春
-        $jdpjq[0] = $sjdjq[22];
-
-        // 惊蛰
-        $jdpjq[1] = $sjdjq[24];
-
-        // 求出指定年节气之 JD 值，从惊蛰开始，到雨水
-        $sjdjq = Ephemeris::adjustedSolarTerms($year, 0, 26);
-
-        // 转移春分至小寒之节气至 $jdpjq 变量中，以重整键名
-        for ($i = 1; $i <= 13; $i++) {
-            $jdpjq[$i + 1] = $sjdjq[2 * $i];
-        }
-
-        return $jdpjq;
-    }
-
-    /**
-     * 求算以含冬至中气为阴历11月开始的连续16个朔望月。
-     *
-     * @param int $year 年份
+     * @param int $year 公历年
      * @return array
      */
-    private static function SMSinceWinterSolstice(int $year)
+    public static function lunarMonths(int $year)
     {
-        // 求出指定年冬至开始之节气JD值，以上一年的值代入
-        $dj = Ephemeris::adjustedSolarTerms($year - 1, 18, 5);
+        // 以上一年冬至为起点的连续16个中气
+        $mcs = Ephemeris::midClimates($year);
 
-        // 转移春分前之节气至 $jdzq 变量中，以重整键名
-        // 冬至中气
-        $jdws = $dj[19];
+        // 以含冬至中气为阴历11月开始的连续16个朔望月的新月点
+        $nms = Ephemeris::newMoons($year);
 
-        $jdnm = [];
+        $lmks[0] = 0;
 
-        // 求年初前两个月附近的新月点（即上一年的11月初）
-        $spcjd = self::gd2jd($year - 1, 11, 0, 0);
+        // 若第13个中气大于等于第14个新月，表示两个冬至之间的11个中气要放到12个朔望月中
+        if (floor($mcs[12] + 0.5) >= floor($nms[13] + 0.5)) {
+            // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
+            $im = 0;
 
-        // 自2000年1月起的朔望月个数
-        $kn = Ephemeris::newMoonNumber($spcjd);
-
-        // 求出连续20个朔望月
-        for ($i = 0; $i <= 19; $i++) {
-            $k = $kn + $i;
-            $mjd = $thejd + Ephemeris::SYNODIC_MONTH * $i;
-
-            // 以 k 值代入求瞬时朔望日，中国时间比格林威治时间先行8小时
-            $tjd[$i] = Ephemeris::trueNewMoon($k) + 1 / 3;
-
-            // 下式为修正dynamical time to Universal time
-            // 1 为1月，0 为上一年12月，-1 为上一年11月
-            $tjd[$i] = $tjd[$i] - Ephemeris::deltaT($year, $i - 1) / 86400;
-        }
-
-        for ($j = 0; $j <= 18; $j++) {
-            // 已超过冬至中气（比较日期法）
-            if (floor($tjd[$j] + 0.5) > floor($jdws + 0.5)) {
-                break;
-            }
-        }
-
-        // 取此时的键值
-        $jj = $j;
-
-        for ($k = 0; $k <= 15; $k++) {
-            // 重排键名，使含冬至朔望月的键名为0
-            $jdnm[$k] = $tjd[$jj - 1 + $k];
-        }
-
-        return $jdnm;
-    }
-
-    /**
-     * 以比较日期法求算冬月及其余各月名称代码，包含闰月，冬月为0，腊月为1，正月为2，其余类推。闰月多加0.5。
-     *
-     * @param int $year
-     * @return array
-     */
-    private static function GetZQandSMandLunarMonthCode(int $year)
-    {
-        $mc = [];
-
-        // 取得以上一年冬至为起点之连续17个中气
-        $jdzq = self::ZQSinceWinterSolstice($year);
-
-        // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $jdnm = self::SMSinceWinterSolstice($year);
-
-        // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
-        $yz = 0;
-
-        $mc[0] = 0;
-
-        // 若第13个中气 $jdzq[12] 大于或等于第14个新月 $jdnm[13]
-        if (floor($jdzq[12] + 0.5) >= floor($jdnm[13] + 0.5)) {
-            // 表示此两个冬至之间的11个中气要放到12个朔望月中
             for ($i = 1; $i <= 14; $i++) {
                 // 至少有一个朔望月不含中气，第一个不含中气的月即为闰月
                 // 若阴历腊月起始日大于冬至中气日，且阴历正月起始日小于或等于大寒中气日，则此月为闰月，其余同理
-                if (floor(($jdnm[$i] + 0.5) > floor($jdzq[$i - 1 - $yz] + 0.5) && floor($jdnm[$i + 1] + 0.5) <= floor($jdzq[$i - $yz] + 0.5))) {
-                    $mc[$i] = $i - 0.5;
+                if (floor(($nms[$i] + 0.5) > floor($mcs[$i - 1 - $im] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i - $im] + 0.5))) {
+                    $lmks[$i] = $i - 0.5;
                     // 标示遇到闰月
-                    $yz = 1;
+                    $im = 1;
                 } else {
                     // 遇到闰月开始，每个月号要减1
-                    $mc[$i] = $i - $yz;
+                    $lmks[$i] = $i - $im;
                 }
             }
         }
@@ -368,78 +265,34 @@ class Calendar
         else {
             // 直接赋予这12个月月代码
             for ($i = 1; $i <= 12; $i++) {
-                $mc[$i] = $i;
+                $lmks[$i] = $i;
             }
+
+            // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
+            $im = 0;
 
             // 处理次一置月年的11月与12月，亦有可能含闰月
             for ($i = 13; $i <= 14; $i++) {
                 // 若次一阴历腊月起始日大于附近的冬至中气日，且阴历正月起始日小于或等于大寒中气日，则此月为闰月，次一正月同理。
-                if (floor(($jdnm[$i] + 0.5) > floor($jdzq[$i - 1 - $yz] + 0.5) && floor($jdnm[$i + 1] + 0.5) <= floor($jdzq[$i - $yz] + 0.5))) {
-                    $mc[$i] = $i - 0.5;
+                if (floor(($nms[$i] + 0.5) > floor($mcs[$i - 1 - $im] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i - $im] + 0.5))) {
+                    $lmks[$i] = $i - 0.5;
                     // 标示遇到闰月
-                    $yz = 1;
+                    $im = 1;
                 } else {
                     // 遇到闰月开始，每个月号要减1
-                    $mc[$i] = $i - $yz;
+                    $lmks[$i] = $i - $im;
                 }
             }
         }
 
-        return $mc;
-    }
-
-    /**
-     * 计算公历的某天是星期几（演示儒略日历的转换作用）。
-     *
-     * @param int $year
-     * @param int $month
-     * @param int $day
-     * @return false|int
-     */
-    public function week($year, $month, $day)
-    {
-        $spcjd = self::gd2jd($year, $month, $day, 12, 0, 0);
-
-        if ($spcjd === false) {
-            return false;
-        }
-
-        // 余数为0代表星期日(因为西元前4713年1月1日12时为星期一)。spcjd加1是因起始日为星期一
-        return ((floor($spcjd + 1) % 7) + 7) % 7;
-    }
-
-    /**
-     * 公历某年月的天数。
-     *
-     * @param int $year
-     * @param int $month
-     * @return int
-     * @throws InvalidArgumentException
-     */
-    public function solarDays(int $year, int $month)
-    {
-        if ($month < 1 || $month > 12) {
-            throw new \InvalidArgumentException('月份超出范围');
-        }
-
-        // 1582年10月只有21天
-        if ($year == 1582 && $month == 10) {
-            return 21;
-        }
-
-        // 可被四整除
-        $ndf1 = -($year % 4 === 0);
-        $ndf2 = (($year % 400 === 0) - ($year % 100 === 0)) && ($year > 1582);
-        $ndf = $ndf1 + $ndf2;
-
-        return 30 + ((abs($month - 7.5) + 0.5) % 2) - ($month === 2) * (2 + $ndf);
+        return $lmks;
     }
 
     /**
      * 农历某年月的天数。
      *
-     * @param int $year
-     * @param int $month
+     * @param int $year 公历年
+     * @param int $month 公历月
      * @param bool $isLeapMonth 是否闰月
      * @return int
      * @throws InvalidArgumentException
@@ -459,8 +312,8 @@ class Calendar
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = self::SMSinceWinterSolstice($year);
-        $mc = self::GetZQandSMandLunarMonthCode($year);
+        $sjd = Ephemeris::newMoons($year);
+        $lmks = self::lunarMonths($year);
 
         // 0 代表无闰月
         $leapMonth = 0;
@@ -468,9 +321,9 @@ class Calendar
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
             // 若是，则将此闰月代码放入闰月旗标內
-            if ($mc[$j] - floor($mc[$j]) > 0) {
+            if ($lmks[$j] - floor($lmks[$j]) > 0) {
                 // $leapMonth = 0 对应阴历11月，1 对应阴历12月，2 对应阴历下一年的1月，依此类推。
-                $leapMonth = (int) floor($mc[$j] + 0.5);
+                $leapMonth = (int) floor($lmks[$j] + 0.5);
                 break;
             }
         }
@@ -479,13 +332,14 @@ class Calendar
         $mx = $month + 2;
 
         // 求算阴历各月之大小，大月30天，小月29天
+        $nofd = [];
         for ($i = 0; $i <= 14; $i++) {
             // 每月天数，加 0.5 是因JD以正午起算
             $nofd[$i] = (int) (floor($sjd[$i + 1] + 0.5) - floor($sjd[$i] + 0.5));
         }
 
-        // 若有勾选闰月
-        if ($isLeapMonth == true) {
+        // 若为闰月
+        if ($isLeapMonth) {
             // 而旗标非闰月或非本年闰月，则表示此年不含闰月
             if ($leapMonth < 3) {
                 // $leapMonth = 0 代表无闰月，1 代表闰月为上一年的11月，2 代表闰月为上一年的12月
@@ -501,36 +355,34 @@ class Calendar
                 // 若输入的月份即为闰月
                 else {
                     // 当月的天数
-                    $day = $nofd[$mx];
+                    $days = $nofd[$mx];
                 }
             }
-        }
-        // 若没有勾选闰月
-        else {
+        } else {
             // 若旗标非闰月，则表示此年不含闰月（包括上一年的11月起之月份）
             if ($leapMonth == 0) {
                 // 当月的天数
-                $day = $nofd[$mx - 1];
+                $days = $nofd[$mx - 1];
             }
             // 若旗标为本年有闰月（包括上一年的11月起之月份）
             else {
-                // 当月的天数。公式 nofd($mx - ($mx > $leapMonth) - 1) 的用意为：若指定月大于闰月，则键名用 $mx ，否则键名用 $mx - 1
-                $day = $nofd[$mx + ($mx > $leapMonth) - 1];
+                // 当月的天数
+                $days = $mx > $leapMonth ? $nofd[$mx] : $nofd[$mx - 1];
             }
         }
 
-        return $day;
+        return $days;
     }
 
     /**
      * 获取农历某年的闰月，0 为无闰月。
      *
-     * @param int $year
+     * @param int $year 公历年
      * @return int
      */
     public function leapMonth(int $year)
     {
-        $mc = self::GetZQandSMandLunarMonthCode($year);
+        $lmks = self::lunarMonths($year);
 
         // 0 代表无闰月
         $leapMonth = 0;
@@ -538,9 +390,9 @@ class Calendar
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
             // 若是，则将此闰月代码放入闰月旗标內
-            if ($mc[$j] - floor($mc[$j]) > 0) {
+            if ($lmks[$j] - floor($lmks[$j]) > 0) {
                 // $leapMonth = 0 对应阴历11月，1 对应阴历12月，2 对应阴历隔年1月，依此类推。
-                $leapMonth = (int) floor($mc[$j] + 0.5);
+                $leapMonth = (int) floor($lmks[$j] + 0.5);
                 break;
             }
         }
@@ -549,47 +401,45 @@ class Calendar
     }
 
     /**
-     * 求出含某公历年立春点开始的二十四节气的儒略日历时间。
+     * 求出指定公历年从立春开始的二十四节气的儒略日期。
      *
-     * @param int $year
-     * @return array $this->solarTerms[(i+21)%24]
+     * @param int $year 公历年
+     * @return array
      */
     public function solarTerms(int $year)
     {
-        // 求出含指定年立春开始之3个节气JD值，以上一年的年值代入
-        $sjdjq = Ephemeris::adjustedSolarTerms($year - 1, 21, 3);
+        // 求出指定年春分前的节气JD值，以上一年的年值代入
+        $sts = Ephemeris::adjustedSolarTerms($year - 1, 21, 3);
 
-        // 转移春分前之立春至惊蛰之节气至 $jdpjq 变量中，以重整键名
         // 立春
-        $jdpjq[0] = $sjdjq[22];
+        $pts[0] = $sts[22];
 
         // 雨水
-        $jdpjq[1] = $sjdjq[23];
+        $pts[1] = $sts[23];
 
         // 惊蛰
-        $jdpjq[2] = $sjdjq[24];
+        $pts[2] = $sts[24];
 
-        // 求出指定年节气之JD值,从春分开始，到大寒
-        $sjdjq = Ephemeris::adjustedSolarTerms($year, 0, 21);
+        // 求出指定年从春分到大寒的节气JD值
+        $sts = Ephemeris::adjustedSolarTerms($year, 0, 21);
 
-        // 转移春分至大寒之节气至 $jdpjq 变量中，以重整键名
         for ($i = 1; $i <= 21; $i++) {
-            $jdpjq[$i + 2] = $sjdjq[$i];
+            $pts[$i + 2] = $sts[$i];
         }
 
-        return $jdpjq;
+        return $pts;
     }
 
     /**
      * 根据公历日期时间计算干支。
      *
-     * @param int $year
-     * @param int $month [1-12]
-     * @param int $day
-     * @param int $hour
-     * @param int $minute 分钟数(0-59)，在跨节的时辰上会需要
-     * @param int $second 秒数(0-59)
-     * @return false/array(天干, 地支)
+     * @param int $year 公历年
+     * @param int $month 公历月
+     * @param int $day 公历日
+     * @param int $hour 时
+     * @param int $minute 分，在跨节的时辰上会需要
+     * @param int $second 秒
+     * @return array|false
      */
     public function cstb(int $year, int $month, int $day, int $hour = 0, int $minute = 0, int $second = 0)
     {
@@ -613,7 +463,7 @@ class Calendar
         $ty = $year;
 
         // 取得自立春开始的非中气之二十四节气
-        $jr = self::pureTermsSinceSpring($year);
+        $jr = Ephemeris::preClimatesSinceSpring($year);
 
         // jr[0] 为立春，约在2月5日前后
         if ($this->springBegins && $spcjd < $jr[0]) {
@@ -621,7 +471,7 @@ class Calendar
             $ty = $year - 1;
 
             // 取得自立春开始的不含中气之12节气
-            $jr = self::pureTermsSinceSpring($ty);
+            $jr = Ephemeris::preClimatesSinceSpring($ty);
         }
 
         $cs = [];
@@ -775,17 +625,17 @@ class Calendar
             // 加上偏移即得一个ygz年
             $iy = $yea + $asyc;
 
-            // 该年的立春开始的节
-            $jdpjq = self::pureTermsSinceSpring($iy);
+            // 该年的立春开始的节气
+            $pts = Ephemeris::preClimatesSinceSpring($iy);
 
             // 已知干支代码，要求干支名，只需将干支代码除以10，所得的余数即为天干的代码；将干支代码除以12，所得的余数即为地支的代码。这里求得mgz在第几个月
             $mgzo = ($mgz + 60 - 2) % 12;
 
             // 节气月头JD
-            $initialJD = $jdpjq[$mgzo];
+            $initialJD = $pts[$mgzo];
 
             // 节气月尾JD
-            $finalJD = $jdpjq[$mgzo + 1];
+            $finalJD = $pts[$mgzo + 1];
 
             // 节气月头的日干支代码，儒略日历时间0日为癸丑日，六十甲子代码为49
             $sdc = (floor($initialJD) + 49) % 60;
@@ -864,7 +714,7 @@ class Calendar
             throw new \InvalidArgumentException('无效的农历月');
         }
 
-        return $this->months[$month - 1];
+        return $this->monthNames[$month - 1];
     }
 
     /**
@@ -931,14 +781,14 @@ class Calendar
             throw new \InvalidArgumentException('适用于西元前1000年至西元3000年，超出此范围误差较大');
         }
 
-        // 验证输入日期的正确性,若不正确则跳离
+        // 验证输入日期的正确性，若不正确则跳离
         if ($this->validDate($year, $month, $day) === false) {
             return false;
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = self::SMSinceWinterSolstice($year);
-        $mc = self::GetZQandSMandLunarMonthCode($year);
+        $sjd = Ephemeris::newMoons($year);
+        $lmks = self::lunarMonths($year);
 
         // 求出指定年月日之JD值
         $jdx = self::gd2jd($year, $month, $day, 12);
@@ -946,8 +796,8 @@ class Calendar
         if (floor($jdx) < floor($sjd[0] + 0.5)) {
             $flag = 1;
             // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-            $sjd = self::SMSinceWinterSolstice($year - 1);
-            $mc = self::GetZQandSMandLunarMonthCode($year - 1);
+            $sjd = Ephemeris::newMoons($year - 1);
+            $lmks = self::lunarMonths($year - 1);
         }
 
         for ($i = 0; $i <= 14; $i++) {
@@ -961,21 +811,21 @@ class Calendar
         // 每月初一从1开始，而非从0开始
         $lunarDay = floor($jdx) - floor($sjd[$mi] + 0.5) + 1;
 
-        if ($mc[$mi] < 2 || $flag == 1) {
+        if ($lmks[$mi] < 2 || $flag == 1) {
             $lunarYear = $year - 1;
         } else {
             $lunarYear = $year;
         }
 
-        // $mc[$mi] 为 0 对应上一年的阴历11月，为 1 对应上一年的阴历12月，为 2 对应本年的阴历1月，依此类推。
-        if (($mc[$mi] - floor($mc[$mi])) * 2 + 1 === 1) {
+        // $lmks[$mi] 为 0 对应上一年的阴历11月，为 1 对应上一年的阴历12月，为 2 对应本年的阴历1月，依此类推。
+        if (($lmks[$mi] - floor($lmks[$mi])) * 2 + 1 === 1) {
             $isLeapMonth = false;
         } else {
             $isLeapMonth = true;
         }
 
         // 对应到月份
-        $lunarMonth = (floor($mc[$mi] + 10) % 12) + 1;
+        $lunarMonth = (floor($lmks[$mi] + 10) % 12) + 1;
 
         // 干支纪年
         list($cs, $tb) = $this->cstb($year, $month, $day);
@@ -1023,8 +873,8 @@ class Calendar
         }
 
         // 求出以含冬至中气为阴历11月开始的连续16个朔望月的新月点
-        $sjd = self::SMSinceWinterSolstice($year);
-        $mc = self::GetZQandSMandLunarMonthCode($year);
+        $sjd = Ephemeris::newMoons($year);
+        $lmks = self::lunarMonths($year);
 
         // 若闰月旗标为0代表无闰月
         $leapMonth = 0;
@@ -1032,9 +882,9 @@ class Calendar
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
             // 若是，则将此闰月代码放入闰月旗标內
-            if ($mc[$j] - floor($mc[$j]) > 0) {
+            if ($lmks[$j] - floor($lmks[$j]) > 0) {
                 // $leapMonth 为 0 对应阴历11月，为 1 对应阴历12月，为 2 对应阴历下一年的1月，依此类推。
-                $leapMonth = floor($mc[$j] + 0.5);
+                $leapMonth = floor($lmks[$j] + 0.5);
                 break;
             }
         }

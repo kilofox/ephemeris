@@ -18,20 +18,20 @@ namespace Kilofox\Ephemeris;
  */
 class Destiny
 {
-    /** @var array $zodiacAnimals 十二生肖 */
-    protected $zodiacAnimals = [
-        '鼠', '牛', '虎', '兔', '龙', '蛇',
-        '马', '羊', '猴', '鸡', '狗', '猪'
-    ];
-
     /** @var array $zodiacSigns 十二星座 */
     protected $zodiacSigns = [
         '摩羯', '宝瓶', '双魚', '白羊', '金牛', '双子',
         '巨蟹', '狮子', '室女', '天秤', '天蝎', '人马'
     ];
 
-    /** @var array $cwx 五行 */
-    protected $cwx = ['金', '水', '木', '火', '土'];
+    /** @var array $cZodiacSigns 十二生肖 */
+    protected $cZodiacSigns = [
+        '鼠', '牛', '虎', '兔', '龙', '蛇',
+        '马', '羊', '猴', '鸡', '狗', '猪'
+    ];
+
+    /** @var array $fivePhases 五行 */
+    protected $fivePhases = ['金', '水', '木', '火', '土'];
 
     /** @var array $genders 性别 */
     protected $genders = ['男', '女'];
@@ -166,10 +166,10 @@ class Destiny
         }
 
         // 显示星座，根据公历的中气判断
-        $zr = Calendar::ZQSinceWinterSolstice($year);
+        $zr = Calendar::midClimates($year);
 
         if ($spcjd < $zr[0]) {
-            $zr = Calendar::ZQSinceWinterSolstice($year - 1);
+            $zr = Calendar::midClimates($year - 1);
         }
 
         // 若小于雨水，则归上一年
@@ -527,10 +527,10 @@ class Destiny
         }
 
         // 显示星座，根据公历的中气判断
-        $zr = Calendar::ZQSinceWinterSolstice($year);
+        $zr = Calendar::midClimates($year);
 
         if ($spcjd < $zr[0]) {
-            $zr = Calendar::ZQSinceWinterSolstice($year - 1);
+            $zr = Calendar::midClimates($year - 1);
         }
 
         // 若小于雨水，则归上一年
@@ -576,7 +576,7 @@ class Destiny
         }
 
         // 生肖与年地支对应
-        $rt['chinese_zodiac'] = $this->zodiacAnimals[$tb[0]];
+        $rt['chinese_zodiac'] = $this->cZodiacSigns[$tb[0]];
 
         // 星座
         $rt['zodiac'] = $this->zodiacSigns[$zodiac];
