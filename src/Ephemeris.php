@@ -424,7 +424,7 @@ class Ephemeris
         // 求出连续20个新月
         for ($i = 0; $i <= 19; $i++) {
             $k = $kn + $i;
-            $mjd = $thejd + self::SYNODIC_MONTH * $i;
+            $mjd = self::SYNODIC_MONTH * $i;
 
             // 以 $k 值代入求瞬时朔望日，中国时间比格林威治时间先行8小时
             $tjd[$i] = self::trueNewMoon($k) + 1 / 3;

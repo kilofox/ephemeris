@@ -18,11 +18,11 @@ namespace Kilofox\Ephemeris;
  */
 class Calendar
 {
-    /** @var bool $springBegins 干支是否以立春作为新年的开始 */
+    /** @var bool $springBegins 干支是否以立春作为岁首 */
     public $springBegins = true;
 
-    /** @var bool $devideFDH 干支是否区分夜子时和早子时 */
-    public $devideFDH = true;
+    /** @var bool $devideZiHour 干支纪时是否区分夜子时和早子时 */
+    public $devideZiHour = false;
 
     /** @var array $cstbs 六十甲子 */
     protected $cstbs = [
@@ -34,13 +34,13 @@ class Calendar
         '甲寅', '乙卯', '丙辰', '丁巳', '戊午', '己未', '庚申', '辛酉', '壬戌', '癸亥'
     ];
 
-    /** @var array $monthNames 阴历月名 */
-    protected $monthNames = [
+    /** @var array $months 农历月名 */
+    protected $months = [
         '正月', '二月', '三月', '四月', '五月', '六月',
         '七月', '八月', '九月', '十月', '冬月', '腊月'
     ];
 
-    /** @var array $days 阴历日名 */
+    /** @var array $days 农历日名 */
     protected $days = [
         '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '廿十',
@@ -228,7 +228,7 @@ class Calendar
     }
 
     /**
-     * 某年从冬月开始的阴历月份（包含闰月）。
+     * 某年从冬月开始的15个阴历月份（含闰月）代号。
      *
      * @param int $year 公历年
      * @return array
@@ -243,44 +243,41 @@ class Calendar
 
         $lmks[0] = 0;
 
-        // 若第13个中气大于等于第14个新月，表示两个冬至之间的11个中气要放到12个朔望月中
-        if (floor($mcs[12] + 0.5) >= floor($nms[13] + 0.5)) {
-            // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
-            $im = 0;
+        // 是否已遇到闰月？
+        $im = false;
 
+        // 若第13个中气大于等于第14个新月，则表示两个冬至之间有12个朔望月
+        if (floor($mcs[12] + 0.5) >= floor($nms[13] + 0.5)) {
+            // 至少有一个朔望月不含中气，第一个不含中气的月即为闰月
             for ($i = 1; $i <= 14; $i++) {
-                // 至少有一个朔望月不含中气，第一个不含中气的月即为闰月
-                // 若阴历腊月起始日大于冬至中气日，且阴历正月起始日小于或等于大寒中气日，则此月为闰月，其余同理
-                if (floor(($nms[$i] + 0.5) > floor($mcs[$i - 1 - $im] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i - $im] + 0.5))) {
+                // 若腊月起始日大于冬至中气日，且正月起始日小于等于大寒中气日，则此月为闰月，其余同理
+                if (!$im && floor(($nms[$i] + 0.5) > floor($mcs[$i - 1] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i] + 0.5))) {
                     $lmks[$i] = $i - 0.5;
-                    // 标示遇到闰月
-                    $im = 1;
+                    // 遇到闰月
+                    $im = true;
                 } else {
-                    // 遇到闰月开始，每个月号要减1
-                    $lmks[$i] = $i - $im;
+                    // 遇到闰月以后，每个月代号要减1
+                    $lmks[$i] = $im ? $i - 1 : $i;
                 }
             }
         }
-        // 否则表示两个连续冬至之间只有11个整月，故无闰月
+        // 否则表示两个连续冬至之间只有11个整月，故12个月无闰月
         else {
-            // 直接赋予这12个月月代码
+            // 直接对12个月赋予月代号
             for ($i = 1; $i <= 12; $i++) {
                 $lmks[$i] = $i;
             }
 
-            // 设定旗标，0表示未遇到闰月，1表示已遇到闰月
-            $im = 0;
-
             // 处理次一置月年的11月与12月，亦有可能含闰月
             for ($i = 13; $i <= 14; $i++) {
-                // 若次一阴历腊月起始日大于附近的冬至中气日，且阴历正月起始日小于或等于大寒中气日，则此月为闰月，次一正月同理。
-                if (floor(($nms[$i] + 0.5) > floor($mcs[$i - 1 - $im] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i - $im] + 0.5))) {
+                // 若次一腊月起始日大于附近的冬至中气日，且正月起始日小于等于大寒中气日，则此月为闰月，次一正月同理
+                if (!$im && floor(($nms[$i] + 0.5) > floor($mcs[$i - 1] + 0.5) && floor($nms[$i + 1] + 0.5) <= floor($mcs[$i] + 0.5))) {
                     $lmks[$i] = $i - 0.5;
-                    // 标示遇到闰月
-                    $im = 1;
+                    // 遇到闰月
+                    $im = true;
                 } else {
-                    // 遇到闰月开始，每个月号要减1
-                    $lmks[$i] = $i - $im;
+                    // 遇到闰月以后，每个月代号要减1
+                    $lmks[$i] = $im ? $i - 1 : $i;
                 }
             }
         }
@@ -437,18 +434,18 @@ class Calendar
      * @param int $month 公历月
      * @param int $day 公历日
      * @param int $hour 时
-     * @param int $minute 分，在跨节的时辰上会需要
+     * @param int $minute 分
      * @param int $second 秒
      * @return array|false
      */
-    public function cstb(int $year, int $month, int $day, int $hour = 0, int $minute = 0, int $second = 0)
+    public function sexagenaryCycle(int $year, int $month, int $day, int $hour = 0, int $minute = 0, int $second = 0)
     {
         // 避免整点模糊
         if ($minute + $second === 0) {
             $second = 10;
         }
 
-        if ($this->validDate($year, $month, $day) === false) {
+        if (!$this->validDate($year, $month, $day)) {
             return false;
         }
 
@@ -462,15 +459,14 @@ class Calendar
         $jr = [];
         $ty = $year;
 
-        // 取得自立春开始的非中气之二十四节气
+        // 取得自立春开始的不含中气的12个节气
         $jr = Ephemeris::preClimatesSinceSpring($year);
 
-        // jr[0] 为立春，约在2月5日前后
+        // 以立春作为岁首，若小于 $jr[0] ，则属于前一个节气年
         if ($this->springBegins && $spcjd < $jr[0]) {
-            // 若小于 jr[0] ，则属于前一个节气年
             $ty = $year - 1;
 
-            // 取得自立春开始的不含中气之12节气
+            // 取得自立春开始的不含中气的12个节气
             $jr = Ephemeris::preClimatesSinceSpring($ty);
         }
 
@@ -478,7 +474,7 @@ class Calendar
         $tb = [];
         $ygz = (($ty + 4712 + 24) % 60 + 60) % 60;
 
-        // 年柱干支
+        // 年干支
         $cs[0] = $ygz % 10;
         $tb[0] = $ygz % 12;
 
@@ -494,12 +490,11 @@ class Calendar
         $tmm = (($ty + 4712) * 12 + $tm + 60) % 60;
         $mgz = ($tmm + 50) % 60;
 
-        // 月柱干支
+        // 月干支
         $cs[1] = $mgz % 10;
         $tb[1] = $mgz % 12;
 
-        // 计算日柱干支
-        // 加0.5是将起始点从正午改为从0点开始
+        // 将起始点从正午改为从0点开始
         $jda = $spcjd + 0.5;
 
         // 将jd的小数部份化为秒，并加上起始点前移的一小时，取其整数值
@@ -509,12 +504,12 @@ class Calendar
         $dayjd = floor($jda) + $thes / 86400;
         $dgz = (floor($dayjd + 49) % 60 + 60) % 60;
 
-        // 日柱干支
+        // 日干支
         $cs[2] = $dgz % 10;
         $tb[2] = $dgz % 12;
 
-        // 区分早夜子时，日柱前移一柱
-        if ($this->devideFDH && $hour >= 23) {
+        // 若区分夜子时和早子时，则子正0时分日
+        if ($this->devideZiHour && $hour >= 23) {
             $cs[2] = ($cs[2] + 9) % 10;
             $tb[2] = ($tb[2] + 11) % 12;
         }
@@ -531,10 +526,10 @@ class Calendar
     /**
      * 根据年干支计算所有合法的月干支。
      *
-     * @param int $ygz 年柱干支代码
-     * @return array 月柱干支代码列表
+     * @param int $ygz 年干支代码
+     * @return array 月干支代码列表
      */
-    public function MGZ($ygz)
+    public function sexagenaryMonths($ygz)
     {
         $mgz = [];
         $nv = 2 + 12 * ($ygz % 10);
@@ -550,10 +545,10 @@ class Calendar
     /**
      * 根据日干支计算所有合法的时干支。
      *
-     * @param int $dgz 日柱干支代码
+     * @param int $dgz 日干支代码
      * @return array 时柱干支代码列表
      */
-    public function HGZ($dgz)
+    public function sexagenaryHours($dgz)
     {
         $hgz = [];
         $nv = 12 * ($dgz % 10);
@@ -567,12 +562,14 @@ class Calendar
     }
 
     /**
-     * 根据四柱干支查找对应的公历日期。这里没有考虑夜子时和早子时。
+     * 根据四柱干支查找对应的公历日期。
      *
-     * @param int $ygz
-     * @param int $mgz
-     * @param int $dgz
-     * @param int $hgz
+     * !! 这里没有考虑夜子时和早子时。
+     *
+     * @param int $ygz 年干支
+     * @param int $mgz 月干支
+     * @param int $dgz 日干支
+     * @param int $hgz 时干支
      * @param int $yeai 起始年
      * @param int $mx 查找多少个甲子
      * @throws InvalidArgumentException
@@ -595,11 +592,11 @@ class Calendar
             throw new \InvalidArgumentException('干支非六十甲子');
         }
 
-        if (!key_exists($mgz, $this->MGZ($ygz))) {
+        if (!key_exists($mgz, $this->sexagenaryMonths($ygz))) {
             throw new \InvalidArgumentException('对应的干支不存在');
         }
 
-        if (!key_exists($hgz, $this->HGZ($dgz))) {
+        if (!key_exists($hgz, $this->sexagenaryHours($dgz))) {
             throw new \InvalidArgumentException('对应的干支不存在');
         }
 
@@ -616,13 +613,13 @@ class Calendar
             $yea = $yeai + $m * 60;
 
             // 将年月干支对应到指定年的节气月起始时刻
-            // 已知公元0年为庚申年，庚申的六十甲子代码为56，这里求得yea的六十甲子代码syc
+            // 已知公元0年为庚申年，庚申的六十甲子代码为56，这里求得 $yea 的六十甲子代码 $syc
             $syc = ($yea + 56) % 60;
 
-            // 年干支代码相对yea干支代码偏移了多少
+            // 年干支代码相对 $yea 干支代码偏移了多少
             $asyc = ($ygz + 60 - $syc) % 60;
 
-            // 加上偏移即得一个ygz年
+            // 加上偏移即得一个 $ygz 年
             $iy = $yea + $asyc;
 
             // 该年的立春开始的节气
@@ -680,25 +677,20 @@ class Calendar
     }
 
     /**
-     * 将农历年转换为年名称。
+     * 将数字年转换为汉字年。
      *
-     * @param string $year 农历年
+     * @param int $year 数字年
      * @return string
-     * @throws InvalidArgumentException
      */
-    public function toChineseYear(string $year)
+    public function toChineseYear(int $year)
     {
-        if (!ctype_digit($year)) {
-            throw new \InvalidArgumentException('无效的农历年');
+        $chars = '';
+
+        for ($i = 0, $l = strlen((string) $year); $i < $l; $i++) {
+            $chars .= $this->numbers[$year[$i]];
         }
 
-        $lunarYear = '';
-
-        for ($i = 0, $l = strlen($year); $i < $l; $i++) {
-            $lunarYear .= $this->numbers[$year[$i]];
-        }
-
-        return $lunarYear;
+        return $chars;
     }
 
     /**
@@ -714,7 +706,7 @@ class Calendar
             throw new \InvalidArgumentException('无效的农历月');
         }
 
-        return $this->monthNames[$month - 1];
+        return $this->months[$month - 1];
     }
 
     /**
@@ -736,27 +728,27 @@ class Calendar
     /**
      * 根据一柱天干地支码返回该柱的六十甲子。
      *
-     * @param int $cs 天干码
-     * @param int $tb 地支码
+     * @param int $stem 天干码
+     * @param int $branch 地支码
      * @return string
      * @throws InvalidArgumentException
      */
-    public function toCstb(int $cs, int $tb)
+    public function toCstb(int $stem, int $branch)
     {
-        if ($cs < 0 || $cs > 59) {
-            throw new \InvalidArgumentException('干支非六十甲子');
+        if ($stem < 0 || $stem > 59) {
+            throw new \InvalidArgumentException('无效的天干');
         }
 
-        if ($tb < 0 || $tb > 59) {
-            throw new \InvalidArgumentException('干支非六十甲子');
+        if ($branch < 0 || $branch > 59) {
+            throw new \InvalidArgumentException('无效的地支');
         }
 
         // 奇对奇，偶对偶，才能组成一柱
-        if ($cs % 2 !== $tb % 2) {
+        if ($stem % 2 !== $branch % 2) {
             throw new \InvalidArgumentException('干支非六十甲子');
         }
 
-        return self::$css[$cs] . self::$tbs[$tb];
+        return self::$css[$stem] . self::$tbs[$branch];
     }
 
     /**
@@ -781,8 +773,7 @@ class Calendar
             throw new \InvalidArgumentException('适用于西元前1000年至西元3000年，超出此范围误差较大');
         }
 
-        // 验证输入日期的正确性，若不正确则跳离
-        if ($this->validDate($year, $month, $day) === false) {
+        if (!$this->validDate($year, $month, $day)) {
             return false;
         }
 
@@ -828,7 +819,7 @@ class Calendar
         $lunarMonth = (floor($lmks[$mi] + 10) % 12) + 1;
 
         // 干支纪年
-        list($cs, $tb) = $this->cstb($year, $month, $day);
+        list($stem, $branch) = $this->sexagenaryCycle($year, $month, $day);
 
         return [
             'lunar_year' => $lunarYear,
@@ -837,9 +828,9 @@ class Calendar
             'lunar_year_chinese' => $this->toChineseYear($lunarYear),
             'lunar_month_chinese' => $this->toChineseMonth($lunarMonth),
             'lunar_day_chinese' => $this->toChineseDay($lunarDay),
-            'cstb_year' => $this->toCstb($cs[0], $tb[0]),
-            'cstb_month' => $this->toCstb($cs[1], $tb[1]),
-            'cstb_day' => $this->toCstb($cs[2], $tb[2]),
+            'cstb_year' => $this->toCstb($stem[0], $branch[0]),
+            'cstb_month' => $this->toCstb($stem[1], $branch[1]),
+            'cstb_day' => $this->toCstb($stem[2], $branch[2]),
             'is_leap' => $isLeapMonth,
         ];
     }
