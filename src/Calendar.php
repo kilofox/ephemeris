@@ -228,6 +228,29 @@ class Calendar
     }
 
     /**
+     * 由于未知原因，个别年份计算出来的闰月与
+     *  https://github.com/ytliu0/ChineseCalendar 提供的结果不一致，在此修正。
+     *
+     * @param int $year 公历年
+     * @param array $months 阴历月列表
+     * @return array
+     */
+    private static function fixLeapMonth(int $year, array $months)
+    {
+        if (in_array($year, [1425])) {
+            foreach ($months as $k => $month) {
+                if ($month > floor($month)) {
+                    $months[$k] = floor($month) + 1;
+                    $months[$k + 1] += 0.5;
+                    break;
+                }
+            }
+        }
+
+        return $months;
+    }
+
+    /**
      * 某年从冬月开始的15个阴历月份（含闰月）代号。
      *
      * @param int $year 公历年
@@ -282,6 +305,9 @@ class Calendar
             }
         }
 
+        // 算法外修正
+        $lmks = self::fixLeapMonth($year, $lmks);
+
         return $lmks;
     }
 
@@ -317,9 +343,8 @@ class Calendar
 
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
-            // 若是，则将此闰月代码放入闰月旗标內
-            if ($lmks[$j] - floor($lmks[$j]) > 0) {
-                // $leapMonth = 0 对应阴历11月，1 对应阴历12月，2 对应阴历下一年的1月，依此类推。
+            if ($lmks[$j] > floor($lmks[$j])) {
+                // 0 对应阴历11月，1 对应阴历12月，2 对应阴历隔年1月，依此类推。
                 $leapMonth = (int) floor($lmks[$j] + 0.5);
                 break;
             }
@@ -386,9 +411,8 @@ class Calendar
 
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
-            // 若是，则将此闰月代码放入闰月旗标內
-            if ($lmks[$j] - floor($lmks[$j]) > 0) {
-                // $leapMonth = 0 对应阴历11月，1 对应阴历12月，2 对应阴历隔年1月，依此类推。
+            if ($lmks[$j] > floor($lmks[$j])) {
+                // 0 对应阴历11月，1 对应阴历12月，2 对应阴历隔年1月，依此类推。
                 $leapMonth = (int) floor($lmks[$j] + 0.5);
                 break;
             }
@@ -872,9 +896,8 @@ class Calendar
 
         // 确认指定年上一年11月开始各月是否闰月
         for ($j = 1; $j <= 14; $j++) {
-            // 若是，则将此闰月代码放入闰月旗标內
-            if ($lmks[$j] - floor($lmks[$j]) > 0) {
-                // $leapMonth 为 0 对应阴历11月，为 1 对应阴历12月，为 2 对应阴历下一年的1月，依此类推。
+            if ($lmks[$j] > floor($lmks[$j])) {
+                // 0 对应阴历11月，1 对应阴历12月，2 对应阴历隔年1月，依此类推。
                 $leapMonth = floor($lmks[$j] + 0.5);
                 break;
             }
