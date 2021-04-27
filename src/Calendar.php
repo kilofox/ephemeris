@@ -464,87 +464,79 @@ class Calendar
      */
     public function sexagenaryCycle(int $year, int $month, int $day, int $hour = 0, int $minute = 0, int $second = 0)
     {
-        // 避免整点模糊
-        if ($minute + $second === 0) {
-            $second = 10;
-        }
-
         if (!$this->validDate($year, $month, $day)) {
             return false;
         }
 
-        $spcjd = self::gd2jd($year, $month, $day, $hour, $minute, $second);
+        $jd = self::gd2jd($year, $month, $day, $hour, $minute, $second);
 
-        if ($spcjd === false) {
+        if ($jd === false) {
             return false;
         }
 
-        // 比较求算节气年ty，求出年干支
-        $jr = [];
-        $ty = $year;
-
         // 取得自立春开始的不含中气的12个节气
-        $jr = Ephemeris::preClimatesSinceSpring($year);
+        $pcs = Ephemeris::preClimatesSinceSpring($year);
 
-        // 以立春作为岁首，若小于 $jr[0] ，则属于前一个节气年
-        if ($this->springBegins && $spcjd < $jr[0]) {
-            $ty = $year - 1;
+        // 以立春作为岁首，若小于 $pcs[0] ，则属于上一个回归年
+        if ($this->springBegins && $jd < $pcs[0]) {
+            $year--;
 
             // 取得自立春开始的不含中气的12个节气
-            $jr = Ephemeris::preClimatesSinceSpring($ty);
+            $pcs = Ephemeris::preClimatesSinceSpring($year);
         }
 
-        $cs = [];
-        $tb = [];
-        $ygz = (($ty + 4712 + 24) % 60 + 60) % 60;
+        $stems = [];
+        $branches = [];
+        $cstb = (($year + 4712 + 24) % 60 + 60) % 60;
 
         // 年干支
-        $cs[0] = $ygz % 10;
-        $tb[0] = $ygz % 12;
+        $stems[0] = $cstb % 10;
+        $branches[0] = $cstb % 12;
 
         // 比较求算节气月，求出月干支
+        $tm = 0;
         for ($j = 0; $j <= 13; $j++) {
-            if ($jr[$j] >= $spcjd) {
-                // 已超过指定时刻，故应取前一个节气
+            if ($pcs[$j] > $jd) {
+                // 已超过指定时刻，故应取上一个节气
                 $tm = $j - 1;
                 break;
             }
         }
 
-        $tmm = (($ty + 4712) * 12 + $tm + 60) % 60;
-        $mgz = ($tmm + 50) % 60;
+        $tmm = (($year + 4712) * 12 + $tm + 60) % 60;
+        $cstb = ($tmm + 50) % 60;
 
         // 月干支
-        $cs[1] = $mgz % 10;
-        $tb[1] = $mgz % 12;
+        $stems[1] = $cstb % 10;
+        $branches[1] = $cstb % 12;
 
         // 将起始点从正午改为从0点开始
-        $jda = $spcjd + 0.5;
+        $jd += 0.5;
 
         // 将jd的小数部份化为秒，并加上起始点前移的一小时，取其整数值
-        $thes = (($jda - floor($jda)) * 86400) + 3600;
+        $seconds = (($jd - floor($jd)) * 86400) + 3600;
 
-        // 将秒数化为日数，加回到jd的整数部份
-        $dayjd = floor($jda) + $thes / 86400;
-        $dgz = (floor($dayjd + 49) % 60 + 60) % 60;
+        // 将秒数化为日数，加回到 $jd 的整数部份
+        $dayjd = floor($jd) + $seconds / 86400;
+        $cstb = (floor($dayjd + 49) % 60 + 60) % 60;
 
         // 日干支
-        $cs[2] = $dgz % 10;
-        $tb[2] = $dgz % 12;
+        $stems[2] = $cstb % 10;
+        $branches[2] = $cstb % 12;
 
         // 若区分夜子时和早子时，则子正0时分日
         if ($this->devideZiHour && $hour >= 23) {
-            $cs[2] = ($cs[2] + 9) % 10;
-            $tb[2] = ($tb[2] + 11) % 12;
+            $stems[2] = ($stems[2] + 9) % 10;
+            $branches[2] = ($branches[2] + 11) % 12;
         }
 
-        // 计算时柱干支
+        // 计算时干支
         $dh = $dayjd * 12;
-        $hgz = (floor($dh + 48) % 60 + 60) % 60;
-        $cs[3] = $hgz % 10;
-        $tb[3] = $hgz % 12;
+        $cstb = (floor($dh + 48) % 60 + 60) % 60;
+        $stems[3] = $cstb % 10;
+        $branches[3] = $cstb % 12;
 
-        return [$cs, $tb];
+        return [$stems, $branches];
     }
 
     /**
@@ -570,7 +562,7 @@ class Calendar
      * 根据日干支计算所有合法的时干支。
      *
      * @param int $dgz 日干支代码
-     * @return array 时柱干支代码列表
+     * @return array 时干支代码列表
      */
     public function sexagenaryHours($dgz)
     {
@@ -708,13 +700,14 @@ class Calendar
      */
     public function toChineseYear(int $year)
     {
-        $chars = '';
+        $year = (string) $year;
+        $chars = [];
 
-        for ($i = 0, $l = strlen((string) $year); $i < $l; $i++) {
-            $chars .= $this->numbers[$year[$i]];
+        for ($i = 0, $l = strlen($year); $i < $l; $i++) {
+            $chars[] = $this->numbers[$year[$i]];
         }
 
-        return $chars;
+        return implode('', $chars);
     }
 
     /**
